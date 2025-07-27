@@ -133,6 +133,41 @@ Visual debugging and monitoring with page screenshots.
 
 ## 🚀 **Quick Start**
 
+### **Docker Container Setup (Recommended)**
+```bash
+# Build the MCP server image
+docker build -t mcp-scraper .
+
+# Create Docker network (if not exists)
+docker network create ai-extractor-network
+
+# Run MCP server container
+docker run -d \
+  --name mcp-scraper \
+  --network ai-extractor-network \
+  -p 8000:8000 \
+  -e MCP_LOG_LEVEL=info \
+  mcp-scraper
+
+# Run n8n container (separate)
+docker run -d \
+  --name n8n_automation \
+  --network ai-extractor-network \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  -e N8N_BASIC_AUTH_ACTIVE=true \
+  -e N8N_BASIC_AUTH_USER=admin \
+  -e N8N_BASIC_AUTH_PASSWORD=your-password \
+  n8nio/n8n:latest
+```
+
+### **Container Communication**
+In this setup:
+- **MCP Server**: Available at `http://mcp-scraper:8000` (internal) and `http://localhost:8000` (external)
+- **n8n Interface**: Available at `http://localhost:5678`
+- **Network**: Both containers communicate via `ai-extractor-network`
+- **Container IPs**: Automatically assigned (e.g., `172.19.0.3` for MCP server)
+
 ### **Local Development**
 ```bash
 # Install dependencies
@@ -145,29 +180,35 @@ playwright install chromium
 python mcp_server.py
 ```
 
-Server starts on `http://localhost:8000`
-
-### **Docker Development**
+### **Test the Setup**
 ```bash
-# Build image
-docker build -t mcp-scraper .
-
-# Run container
-docker run -p 8000:8000 mcp-scraper
-```
-
-### **Test the Server**
-```bash
-# Health check
+# Health check MCP server (external)
 curl http://localhost:8000/health
 
-# Test extraction (if you add HTTP endpoints)
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}'
+# Check n8n connectivity (external)
+curl http://localhost:5678/healthz
+
+# Test container network communication (internal)
+docker exec n8n_automation curl http://mcp-scraper:8000/health
+docker exec n8n_automation wget http://mcp-scraper:8000/sse
+
+# Verify container network details
+docker network inspect ai-extractor-network
 ```
 
 ## 🔧 **Configuration**
+
+### **Docker Network Setup**
+```bash
+# Create shared network for containers
+docker network create ai-extractor-network
+
+# List networks to verify
+docker network ls
+
+# Inspect network
+docker network inspect ai-extractor-network
+```
 
 ### **Environment Variables**
 ```env
@@ -176,12 +217,40 @@ MCP_LOG_LEVEL=info          # Logging level (debug, info, warning, error)
 MCP_MAX_RETRIES=3           # Maximum retry attempts
 MCP_TIMEOUT=45              # Request timeout in seconds
 MCP_USER_AGENT=Mozilla/5.0... # Browser user agent
+HOST=0.0.0.0               # Bind to all interfaces for container access
+PORT=8000                  # Internal container port
 
 # Performance tuning
 MCP_CONCURRENT_LIMIT=5      # Max concurrent extractions
 MCP_RATE_LIMIT=100          # Requests per minute
 MCP_CACHE_TTL=3600          # Cache duration in seconds
 ```
+
+### **Container Configuration**
+```bash
+# MCP Server container
+docker run -d \
+  --name mcp-scraper \
+  --network ai-extractor-network \
+  -p 8000:8000 \
+  -e MCP_LOG_LEVEL=info \
+  -e MCP_TIMEOUT=45 \
+  -e HOST=0.0.0.0 \
+  -e PORT=8000 \
+  mcp-scraper
+
+# n8n container connection to MCP
+# In n8n MCP Client node, use: http://mcp-scraper:8000/sse/
+```
+
+### **n8n MCP Client Configuration**
+In your n8n workflow MCP Client node:
+```
+SSE Endpoint: http://mcp-scraper:8000/sse/
+Tools: analyze_page_structure, extract_content_with_plan
+```
+
+**Important**: Use the trailing slash `/sse/` for proper MCP protocol communication.
 
 ### **Playwright Configuration**
 ```python
@@ -222,10 +291,57 @@ The server automatically detects page types with confidence scoring:
 
 ## 🐛 **Debugging & Monitoring**
 
-### **Health Check Endpoint**
+### **Container Health Checks**
 ```bash
+# Check MCP server health (external access)
 curl http://localhost:8000/health
-# Response: {"status": "healthy", "version": "1.0.0"}
+
+# Check from n8n container (internal network)
+docker exec n8n_automation curl http://mcp-scraper:8000/health
+docker exec n8n_automation wget http://mcp-scraper:8000/sse
+
+# View container logs
+docker logs mcp-scraper
+docker logs n8n_automation
+
+# Follow logs in real-time
+docker logs -f mcp-scraper
+```
+
+### **Network Debugging**
+```bash
+# Test container connectivity
+docker exec mcp-scraper ping n8n_automation
+docker exec n8n_automation ping mcp-scraper
+
+# Check network configuration and container IPs
+docker network inspect ai-extractor-network
+
+# View container network details (find IP addresses)
+docker inspect mcp-scraper | grep -A 10 NetworkSettings
+docker inspect n8n_automation | grep -A 10 NetworkSettings
+
+# List all containers in network
+docker network inspect ai-extractor-network | grep -A 5 -B 5 "Name"
+```
+
+### **Container Management**
+```bash
+# Restart containers
+docker restart mcp-scraper
+docker restart n8n_automation
+
+# Stop containers
+docker stop mcp-scraper n8n_automation
+
+# Remove containers (keeps images and volumes)
+docker rm mcp-scraper n8n_automation
+
+# Rebuild MCP server
+docker build -t mcp-scraper .
+docker stop mcp-scraper
+docker rm mcp-scraper
+docker run -d --name mcp-scraper --network ai-extractor-network -p 8000:8000 mcp-scraper
 ```
 
 ### **Screenshot Debugging**
@@ -246,31 +362,104 @@ export MCP_LOG_LEVEL=debug
 
 ## 🔧 **Troubleshooting**
 
-### **Common Issues**
+### **Common Container Issues**
 
-**Browser not found:**
+**MCP server not accessible from n8n:**
 ```bash
-# Reinstall Playwright browsers
-playwright install chromium
-playwright install-deps chromium
+# Check if containers are on same network
+docker inspect mcp-scraper | grep NetworkMode
+docker inspect n8n_automation | grep NetworkMode
+
+# Test connectivity (your actual container names)
+docker exec n8n_automation curl http://mcp-scraper:8000/health
+docker exec n8n_automation wget http://mcp-scraper:8000/sse
+
+# Verify network communication with IP
+docker exec n8n_automation curl http://172.19.0.3:8000/health  # Use actual IP
 ```
 
-**Memory issues:**
+**Container startup failures:**
 ```bash
-# Increase Docker memory limit or system resources
-# Monitor with: docker stats
+# Check container logs
+docker logs mcp-scraper
+
+# Common issues:
+# - Port already in use: docker ps -a
+# - Network not found: docker network create ai-extractor-network
+# - Image build failed: docker build -t mcp-scraper .
 ```
 
-**Timeout errors:**
-```env
-# Increase timeout in environment
-MCP_TIMEOUT=60
+**n8n MCP Client connection issues:**
+```bash
+# Verify endpoint in n8n MCP Client node
+# Correct: http://mcp-scraper:8000/sse/
+# Wrong: http://localhost:8000/sse/ (won't work from container)
+
+# Test MCP endpoint manually
+docker exec n8n_automation wget -O- http://mcp-scraper:8000/sse/
 ```
 
-**Permission errors in Docker:**
-```dockerfile
-# Ensure non-root user (already configured)
-USER mcpuser
+**Network communication issues:**
+```bash
+# Recreate network with your containers
+docker network rm ai-extractor-network
+docker network create ai-extractor-network
+
+# Restart containers with network
+docker stop mcp-scraper n8n_automation
+docker rm mcp-scraper n8n_automation
+
+# Recreate containers (use your run commands)
+docker run -d --name mcp-scraper --network ai-extractor-network -p 8000:8000 mcp-scraper
+docker run -d --name n8n_automation --network ai-extractor-network -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n:latest
+```
+
+### **n8n MCP Client Troubleshooting**
+
+**Connection refused errors:**
+- ✅ Verify endpoint: `http://mcp-scraper:8000/sse/` (not localhost)
+- ✅ Check network: Both containers in `ai-extractor-network`  
+- ✅ Test connectivity: `docker exec n8n_automation ping mcp-scraper`
+- ✅ Verify IP resolution: Your test shows `172.19.0.3:8000` working
+
+**Tool not found errors:**
+- Verify available tools in MCP server logs: `docker logs mcp-scraper`
+- Check tool names: `analyze_page_structure`, `extract_content_with_plan`
+- Ensure MCP server is fully started before n8n connects
+
+**Successful Connection Indicators:**
+```bash
+# This should work (your test confirmed it does):
+docker exec n8n_automation wget http://mcp-scraper:8000/sse
+# Output: Connecting to mcp-scraper:8000 (172.19.0.3:8000) ✅
+```
+
+### **Performance Optimization**
+
+**For production deployment:**
+```bash
+# Run with resource limits (using your container names)
+docker run -d \
+  --name mcp-scraper \
+  --network ai-extractor-network \
+  --memory=2g \
+  --cpus=1.5 \
+  -p 8000:8000 \
+  -e MCP_LOG_LEVEL=warning \
+  -e MCP_CONCURRENT_LIMIT=10 \
+  mcp-scraper
+
+docker run -d \
+  --name n8n_automation \
+  --network ai-extractor-network \
+  --memory=1g \
+  --cpus=1.0 \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  -e N8N_BASIC_AUTH_ACTIVE=true \
+  -e N8N_BASIC_AUTH_USER=admin \
+  -e N8N_BASIC_AUTH_PASSWORD=your-secure-password \
+  n8nio/n8n:latest
 ```
 
 ### **Performance Optimization**
@@ -314,15 +503,37 @@ browser_args = [
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   n8n Workflow │────│ MCP Server       │────│ Target Website │
-│                 │    │                  │    │                 │
-│ - AI Agents     │    │ - Playwright     │    │ - Any webpage   │
-│ - Validation    │    │ - Content        │    │ - JavaScript    │
-│ - Retry Logic   │    │   Analysis       │    │ - Dynamic       │
-└─────────────────┘    │ - Quality        │    │   Content       │
-                       │   Scoring        │    └─────────────────┘
-                       └──────────────────┘
+│  n8n_automation │────│   mcp-scraper    │────│ Target Website │
+│   (port 5678)   │    │   (port 8000)    │    │                 │
+│                 │    │ IP: 172.19.0.3   │    │ - Any webpage   │
+│ - AI Agents     │    │                  │    │ - JavaScript    │
+│ - Validation    │    │ - Playwright     │    │ - Dynamic       │
+│ - Retry Logic   │    │ - Content        │    │   Content       │
+│                 │    │   Analysis       │    └─────────────────┘
+└─────────────────┘    │ - Quality        │    
+        │              │   Scoring        │    
+        └─────────────────────┬─────────────────────┘
+                ai-extractor-network
+            (Container communication via hostnames)
 ```
+
+### **Container Communication Flow**
+1. **n8n Workflow** triggers MCP Client node
+2. **MCP Client** sends request to `http://mcp-scraper:8000/sse/`
+3. **Docker Network** resolves `mcp-scraper` to IP `172.19.0.3`
+4. **MCP Server** receives request and processes with Playwright
+5. **Playwright** loads target webpage with full browser
+6. **Content Analysis** extracts structured data with confidence scoring
+7. **Response** returns to n8n via container network
+8. **n8n Agents** process the extracted data for validation
+
+### **Network Configuration**
+- **Network Name**: `ai-extractor-network` (default bridge)
+- **Container Names**: `mcp-scraper`, `n8n_automation`
+- **Internal Communication**: Container-to-container via hostnames
+- **External Access**: Host ports (5678 for n8n, 8000 for MCP)
+- **IP Range**: `172.19.0.x` subnet (Docker default)
+- **Security**: Isolated network, containers only accessible to each other
 
 ## 🤝 **Contributing**
 
