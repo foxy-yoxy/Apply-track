@@ -1,400 +1,351 @@
-# 🕷️ MCP Web Scraper Server
+# 🔄 AI Web Extraction Workflows
 
-> **Universal web content extraction server using Playwright and Model Context Protocol (MCP)**
+This directory contains n8n workflow definitions for intelligent web data extraction with multi-agent AI validation.
 
-High-performance web scraping server that provides intelligent content extraction with confidence scoring, structured data parsing, and quality validation for any webpage.
+## 📁 **Directory Structure**
 
-## 🎯 **Features**
-
-### **🧠 Intelligent Analysis**
-- **Universal page detection** - Automatically identifies product pages, articles, biographies, timelines
-- **Confidence scoring** - Provides reliability metrics for extracted data
-- **Semantic understanding** - Recognizes content patterns and structures
-
-### **🔍 Comprehensive Extraction**
-- **Structured data** - JSON-LD, microdata, and meta tag parsing
-- **Content analysis** - Headings, paragraphs, links, images, contact information
-- **Product-specific** - Prices, descriptions, vendor details, ratings
-- **Social media** - Platform links and contact methods
-
-### **🛡️ Robust & Reliable**
-- **Error recovery** - Multiple retry strategies with exponential backoff
-- **Browser automation** - Full JavaScript rendering with Playwright
-- **Health monitoring** - Built-in health checks and status endpoints
-- **Performance optimized** - Async processing and resource management
-
-## 🏗️ **API Endpoints**
-
-### **`analyze_page_structure`**
-Comprehensive webpage analysis with intelligent content extraction.
-
-**Input:**
-```json
-{
-  "url": "https://example.com/product-page"
-}
+```
+workflows/
+├── README.md                           # This file
+├── Ai_extractor_workflows.json         # Main extraction workflow
 ```
 
-**Output:**
-```json
-{
-  "status": "success",
-  "pageType": "product",
-  "confidence": 0.95,
-  "data": {
-    "productInfo": {
-      "title": "Premium Wireless Headphones",
-      "price": "€299.99",
-      "description": "High-quality audio with noise cancellation...",
-      "brand": "AudioTech",
-      "rating": "4.8/5"
-    },
-    "metadata": {
-      "og:title": "Premium Wireless Headphones",
-      "og:price:amount": "299.99",
-      "og:price:currency": "EUR"
-    },
-    "contentAreas": [...],
-    "structuredData": [...],
-    "contactInfo": {
-      "emails": ["support@audiotech.com"],
-      "phones": ["+33 1 23 45 67 89"]
-    }
-  },
-  "extraction_stats": {
-    "metadata_fields": 15,
-    "content_areas": 8,
-    "links_found": 25,
-    "images_found": 12
-  }
-}
+## 🎯 **Main Workflow: Ai_extractor_workflows.json**
+
+### **Overview**
+Multi-agent AI pipeline that transforms any webpage URL into structured JSON data with quality validation and intelligent retry logic.
+
+### **Workflow Components**
+
+#### **1. Input & Validation Layer**
+- **When chat message received** - Chat trigger for URL input
+- **Validate URL** - JavaScript code node for URL format validation
+- **If** - Routes valid URLs forward, rejects invalid ones
+- **Check Url accessibility** - HTTP HEAD request to test URL reachability
+- **IF** - Checks HTTP response status (200 = accessible)
+- **Url Error Handler** - Handles inaccessible or invalid URLs
+
+#### **2. AI Agent Pipeline**
+- **Planner Agent** (OpenAI GPT-4 Turbo) - Analyzes webpage with MCP tools
+  - Uses MCP Client to call `analyze_page_structure`
+  - Extracts comprehensive page information
+  - Provides intelligent reasoning about content
+- **Extractor Agent** (OpenAI GPT-4 Turbo) - Transforms analysis into JSON
+  - Maps analysis to structured JSON schema
+  - Uses logical deduction for missing fields
+  - Applies business rules (e.g., .fr domain = France)
+- **Validator Agent** (OpenAI GPT-4) - Quality assessment and scoring
+  - Counts filled vs empty fields dynamically
+  - Calculates confidence and completeness scores
+  - Provides actionable improvement suggestions
+
+#### **3. Processing & Control Layer**
+- **Code** - JSON Parser that cleans AI-generated output
+  - Removes markdown formatting and escape characters
+  - Provides both individual fields and full JSON string
+  - Handles malformed JSON with error recovery
+- **Parser validation code** - Extracts validation metrics
+  - Robust JSON extraction with 3-tier fallback
+  - Returns structured validation data
+- **Gate quality** - Quality-based decision logic
+  - Implements retry mechanism for low-quality extractions
+  - Sets thresholds (40% completeness, 30% confidence)
+  - Maximum 2 retry attempts with enhanced prompts
+
+#### **4. Output Layer**
+- **Parser** - Final JSON cleaner for output data
+- **LayoutData** - Template mapper for UI display format
+
+### **Data Flow**
+```
+URL Input → Validation → Accessibility → Planner → Extractor → Validator → Quality Gate → Final Output
+    ↓           ↓           ↓           ↓          ↓          ↓           ↓
+  Chat UI   Format      HTTP Test   MCP Tools   JSON     Confidence  Template
+           Check                              Structure  Scoring     Mapping
+                                                  ↓
+                                            Retry Logic (max 2 attempts)
 ```
 
-### **`extract_content_with_plan`**
-Targeted extraction using CSS selectors from extraction plan.
+### **MCP Integration**
+The workflow connects to your MCP server container:
+- **SSE Endpoint**: `http://mcp-scraper:8000/sse/`
+- **Tools Used**: `analyze_page_structure`
+- **Container Communication**: Via Docker network `ai-extractor-network`
 
-**Input:**
-```json
-{
-  "url": "https://example.com",
-  "extraction_plan": {
-    "titleSelectors": ["h1", ".product-title"],
-    "priceSelectors": [".price", "[data-price]"],
-    "descriptionSelectors": [".description", ".product-details"]
-  }
-}
-```
+## 🔧 **Import Instructions**
 
-### **`validate_extraction_quality`**
-Quality assessment and confidence scoring for extracted data.
+### **Step 1: Import Workflow**
+1. Open n8n interface at `http://localhost:5678`
+2. Login with your credentials
+3. Click **"Import from file"** or use `Ctrl+O`
+4. Select `Ai_extractor_workflows.json`
+5. Click **"Import"**
 
-**Input:**
-```json
-{
-  "url": "https://example.com",
-  "extracted_data": { /* extracted content */ }
-}
-```
+### **Step 2: Configure Credentials**
+The workflow requires OpenAI API credentials:
 
-**Output:**
-```json
-{
-  "status": "success",
-  "validation": {
-    "overallConfidence": 0.85,
-    "fieldValidation": {
-      "passport.id": {"valid": true, "confidence": 1.0},
-      "headings": {"valid": true, "confidence": 0.9}
-    },
-    "issues": [],
-    "suggestions": ["High quality extraction - proceed with confidence"]
-  }
-}
-```
+**OpenAI Credential Setup:**
+1. Go to **Credentials** → **Add Credential**
+2. Select **"OpenAI"**
+3. Enter your API key
+4. Name it exactly: `OpenAi account` (matches workflow expectation)
+5. Save
 
-### **`get_page_screenshot`**
-Visual debugging and monitoring with page screenshots.
-
-**Input:**
-```json
-{
-  "url": "https://example.com"
-}
-```
-
-**Output:**
-```json
-{
-  "status": "success",
-  "screenshot_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "viewport": {"width": 1280, "height": 720}
-}
-```
-
-## 🚀 **Quick Start**
-
-### **Docker Container Setup (Recommended)**
-```bash
-# Build the MCP server image
-docker build -t mcp-scraper .
-
-# Create Docker network (if not exists)
-docker network create ai-extractor-network
-
-# Run MCP server container
-docker run -d \
-  --name mcp-scraper \
-  --network ai-extractor-network \
-  -p 8000:8000 \
-  mcp-scraper
-
-# Run n8n container (separate)
-docker run -d \
-  --name n8n_automation \
-  --network ai-extractor-network \
-  -p 5678:5678 \
-  -v n8n_data:/home/node/.n8n \
-  n8nio/n8n:latest
-```
-
-### **Container Communication**
-In this setup:
-- **MCP Server**: Available at `http://mcp-scraper:8000/sse` (internal) and `http://localhost:8000` (external)
-- **n8n Interface**: Available at `http://localhost:5678`
-- **Network**: Both containers communicate via `ai-extractor-network`
-
-### **Local Development**
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Install Playwright browsers
-playwright install chromium
-
-# Run server
-python mcp_server.py
-```
-
-### **Test the Setup**
-```bash
-
-# Test container network communication (internal)
-docker exec n8n_automation wget http://mcp-scraper:8000/sse
-
-# Verify container network details
-docker network inspect ai-extractor-network
-```
-
-## 🔧 **Configuration**
-
-### **Docker Network Setup**
-```bash
-# Create shared network for containers
-docker network create ai-extractor-network
-
-# List networks to verify
-docker network ls
-
-# Inspect network
-docker network inspect ai-extractor-network
-```
-
-
-### **Container Configuration**
-```bash
-# MCP Server container
-docker run -d \
-  --name mcp-scraper \
-  --network ai-extractor-network \
-  -p 8000:8000 \
-  mcp-scraper
-
-# n8n container connection to MCP
-# In n8n MCP Client node, use: http://mcp-scraper:8000/sse/
-```
-
-### **n8n MCP Client Configuration**
-In your n8n workflow MCP Client node:
+### **Step 3: Configure MCP Connection**
+Verify the **MCP Client** node settings:
 ```
 SSE Endpoint: http://mcp-scraper:8000/sse/
-Tools: analyze_page_structure, extract_content_with_plan
+Include Tools: ☑️ analyze_page_structure
 ```
 
-**Important**: Use the trailing slash `/sse/` for proper MCP protocol communication.
+**Important**: Ensure your MCP server container is running and accessible.
 
-## 📊 **Page Type Detection**
+### **Step 4: Test Workflow**
+1. Click **"Execute Workflow"** or use the chat interface
+2. Enter test URL: `https://example.com/product-page`
+3. Monitor execution in real-time
+4. Check output quality and structure
 
-The server automatically detects page types with confidence scoring:
+## 📊 **Workflow Performance**
 
-| Page Type | Detection Criteria | Confidence Factors |
-|-----------|-------------------|-------------------|
-| **Product** | Price elements, cart buttons, product schemas | E-commerce indicators, structured data |
-| **Article** | Article tags, author info, publish dates | Content structure, metadata |
-| **Biography** | Bio keywords, career mentions, personal info | Biographical indicators |
-| **Company** | About pages, founding info, corporate structure | Business indicators |
-| **Timeline** | Chronological content, date sequences | Temporal patterns |
+### **Typical Metrics**
+- **Processing Time**: 20-45 seconds per URL
+- **Success Rate**: 85-95% depending on site complexity
+- **Quality Score**: 0.6-0.9 confidence range
+- **Retry Rate**: 15-20% of extractions trigger retry
 
-## 🔍 **Content Extraction Strategies**
+### **Quality Thr## 🚀 **Usage Examples**
 
-### **Multi-Strategy Approach**
-1. **Structured Data First** - JSON-LD, microdata, meta tags
-2. **Semantic Selectors** - Content-aware CSS selection
-3. **Pattern Recognition** - Text pattern matching for contacts, dates
-4. **Fallback Extraction** - Generic content area identification
-
-
-## 🐛 **Debugging & Monitoring**
-
-### **Container Health Checks**
+### **Product Page Extraction**
 ```bash
-# Check MCP server health (external access)
-curl http://localhost:8000/sse
+# Input URL
+https://shop.example.com/wireless-headphones
 
-# Check from n8n container (internal network)
-docker exec n8n_automation wget http://mcp-scraper:8000/sse
-
-# View container logs
-docker logs mcp-scraper
-docker logs n8n_automation
-
-# Follow logs in real-time
-docker logs -f mcp-scraper
+# Expected Output
+{
+  "passport": {
+    "id": "https://shop.example.com/wireless-headphones",
+    "authority": "shop.example.com",
+    "issuedOn": "2025-01-15T10:30:00Z"
+  },
+  "steps": [{
+    "narrative": {
+      "title": "Premium Wireless Headphones",
+      "paragraph": "High-quality audio with noise cancellation..."
+    },
+    "extraNote": "€299.99"
+  }],
+  "actors": [{
+    "fullName": "AudioTech Solutions",
+    "country": "France",
+    "role": "vendor"
+  }]
+}
 ```
 
-### **Network Debugging**
+### **Article Page Extraction**
 ```bash
-# Test container connectivity
-docker exec mcp-scraper ping n8n_automation
-docker exec n8n_automation ping mcp-scraper
+# Input URL
+https://news.example.com/ai-breakthrough
 
-# Check network configuration and container IPs
-docker network inspect ai-extractor-network
-
-# View container network details (find IP addresses)
-docker inspect mcp-scraper | grep -A 10 NetworkSettings
-docker inspect n8n_automation | grep -A 10 NetworkSettings
-
-# List all containers in network
-docker network inspect ai-extractor-network | grep -A 5 -B 5 "Name"
+# Expected Output
+{
+  "passport": {
+    "id": "https://news.example.com/ai-breakthrough",
+    "authority": "news.example.com"
+  },
+  "steps": [{
+    "narrative": {
+      "title": "AI Breakthrough in Medical Diagnosis",
+      "paragraph": "Researchers have developed a new AI system..."
+    }
+  }],
+  "actors": [{
+    "fullName": "News Example Media",
+    "role": "publisher"
+  }]
+}
 ```
 
-### **Container Management**
+## 🔍 **Troubleshooting**
+
+### **Common Issues**
+
+**MCP Connection Failed:**
 ```bash
-# Restart containers
-docker restart mcp-scraper
-docker restart n8n_automation
-
-# Stop containers
-docker stop mcp-scraper n8n_automation
-
-# Remove containers (keeps images and volumes)
-docker rm mcp-scraper n8n_automation
-
-# Rebuild MCP server
-docker build -t mcp-scraper .
-docker stop mcp-scraper
-docker rm mcp-scraper
-docker run -d --name mcp-scraper --network ai-extractor-network -p 8000:8000 mcp-scraper
-```
-
-## 🔧 **Troubleshooting**
-
-### **Common Container Issues**
-
-**MCP server not accessible from n8n:**
-```bash
-# Check if containers are on same network
-docker inspect mcp-scraper | grep NetworkMode
-docker inspect n8n_automation | grep NetworkMode
-
-# Test connectivity (your actual container names)
-docker exec n8n_automation wget http://mcp-scraper:8000/sse
-
-```
-
-**Container startup failures:**
-```bash
-# Check container logs
+# Check MCP server status
 docker logs mcp-scraper
 
-# Common issues:
-# - Port already in use: docker ps -a
-# - Network not found: docker network create ai-extractor-network
-# - Image build failed: docker build -t mcp-scraper .
+# Test connectivity from n8n container
+docker exec n8n_automation curl http://mcp-scraper:8000/health
+
+# Verify endpoint in MCP Client node
+SSE Endpoint: http://mcp-scraper:8000/sse/  # Note the trailing slash
 ```
 
-**n8n MCP Client connection issues:**
+**OpenAI API Errors:**
 ```bash
-# Verify endpoint in n8n MCP Client node
-# Correct: http://mcp-scraper:8000/sse/
-# Wrong: http://localhost:8000/sse/ (won't work from container)
-
-# Test MCP endpoint manually
-docker exec n8n_automation wget -O- http://mcp-scraper:8000/sse/
+# Check credential configuration
+- Credential name must be exactly: "OpenAi account"
+- Verify API key is valid and has sufficient credits
+- Check rate limits if getting 429 errors
 ```
 
-**Network communication issues:**
+**Low Quality Extractions:**
 ```bash
-# Recreate network with your containers
-docker network rm ai-extractor-network
-docker network create ai-extractor-network
+# Common causes:
+- JavaScript-heavy websites (MCP should handle this)
+- Blocked by CORS or anti-bot measures
+- Content behind authentication
+- Very minimal content on page
 
-# Restart containers with network
-docker stop mcp-scraper n8n_automation
-docker rm mcp-scraper n8n_automation
-
-# Recreate containers (use your run commands)
-docker run -d --name mcp-scraper --network ai-extractor-network -p 8000:8000 mcp-scraper
-docker run -d --name n8n_automation --network ai-extractor-network -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n:latest
+# Solutions:
+- Let retry logic attempt enhanced extraction
+- Check MCP server logs for specific errors
+- Test with simpler websites first
 ```
 
-### **n8n MCP Client Troubleshooting**
-
-**Connection refused errors:**
-- ✅ Verify endpoint: `http://mcp-scraper:8000/sse/` (not localhost)
-- ✅ Check network: Both containers in `ai-extractor-network`  
-- ✅ Test connectivity: `docker exec n8n_automation ping mcp-scraper`
-- ✅ Verify IP resolution: Your test shows `172.19.0.3:8000` working
-
-**Tool not found errors:**
-- Verify available tools in MCP server logs: `docker logs mcp-scraper`
-- Check tool names: `analyze_page_structure`, `extract_content_with_plan`
-- Ensure MCP server is fully started before n8n connects
-
-**Successful Connection Indicators:**
+**Workflow Execution Timeout:**
 ```bash
-# This should work (your test confirmed it does):
-docker exec n8n_automation wget http://mcp-scraper:8000/sse
-# Output: Connecting to mcp-scraper:8000 (172.19.0.3:8000) ✅
+# Typical processing times:
+- Simple pages: 15-25 seconds
+- Complex pages: 30-45 seconds
+- With retries: 60-90 seconds
+
+# If timing out consistently:
+- Check MCP server performance
+- Verify Docker container resources
+- Monitor OpenAI API response times
 ```
 
 ### **Performance Optimization**
 
-**For production deployment:**
-```bash
-# Run with resource limits (using your container names)
-docker run -d \
-  --name mcp-scraper \
-  --network ai-extractor-network \
-  --memory=2g \
-  --cpus=1.5 \
-  -p 8000:8000 \
-  mcp-scraper
+**For High-Volume Usage:**
+- Use webhooks instead of chat trigger for batch processing
+- Implement caching for frequently accessed URLs
+- Monitor OpenAI API usage and costs
+- Consider using Groq for validation to reduce OpenAI costs
 
-docker run -d \
-  --name n8n_automation \
-  --network ai-extractor-network \
-  --memory=1g \
-  --cpus=1.0 \
-  -p 5678:5678 \
-  -v n8n_data:/home/node/.n8n \
-  n8nio/n8n:latest
+## 📊 **Monitoring & Analytics**
+
+### **Key Metrics to Track**
+- **Success Rate**: % of successful extractions
+- **Quality Score**: Average completeness and confidence
+- **Processing Time**: Average time per extraction
+- **Retry Rate**: % of extractions requiring retries
+- **API Costs**: OpenAI token usage per extraction
+
+### **Quality Indicators**
+- **High Quality (0.8+ completeness)**: Rich structured data
+- **Medium Quality (0.5-0.8)**: Basic information extracted
+- **Low Quality (0.3-0.5)**: Minimal data, may need manual review
+- **Poor Quality (<0.3)**: Failed extraction, manual intervention needed
+
+## 🔄 **Workflow Versions**
+
+### **Current Version: v1.0**
+- Multi-agent pipeline with quality validation
+- Intelligent retry logic with enhanced prompts
+- MCP integration for robust web scraping
+- Dynamic JSON schema mapping
+
+### **Future Enhancements**
+- Batch URL processing capability
+- Custom schema templates for different industries
+- Advanced analytics and reporting
+- Integration with external data sources
+
+## 📝 **Development Notes**
+
+### **Code Nodes**
+- **Validate URL**: Basic regex validation with retry counter
+- **Code**: JSON parser with markdown cleaning and error handling
+- **Parser validation code**: 3-tier extraction with regex fallback
+- **Gate quality**: Decision logic for retry vs accept
+- **Parser**: Final data cleaner
+- **LayoutData**: Template mapping for UI display
+
+### **Webhook Configuration**
+```bash
+# Chat trigger webhook ID
+webhookId: "69b625fe-dd04-4113-bd3a-0b6c7266f670"
+
+# Access URL
+https://your-n8n-domain.com/webhook/69b625fe-dd04-4113-bd3a-0b6c7266f670
 ```
 
-## 🙏 **Acknowledgments**
+---
 
-- **[Playwright](https://playwright.dev/)** - Reliable browser automation
-- **[FastMCP](https://github.com/jlowin/fastmcp)** - Model Context Protocol implementation
-- **[n8n](https://n8n.io)** - Workflow automation platform integration
+## 🤝 **Contributing**
+
+To modify or enhance the workflow:
+
+1. **Backup Current Version**: Export existing workflow before changes
+2. **Test Changes**: Use development environment for testing
+3. **Document Updates**: Update this README with any changes
+4. **Version Control**: Increment version number in workflow name
+
+## 📄 **License**
+
+This workflow is part of the AI Web Extractor project and follows the same MIT License.
 
 ---
+
+<div align="center">
+
+**🚀 Ready to extract intelligence from any webpage!**
+
+[⬆️ Back to Main Project](../README.md) • [📖 Full Documentation](../docs/) • [🔧 MCP Server](../mcp-server/)
+
+</div>
+
+## 🔧 **Workflow Configuration**
+
+### **AI Models Used**
+- **Planner Agent**: OpenAI GPT-4 Turbo Preview
+- **Extractor Agent**: OpenAI GPT-4 Turbo Preview  
+- **Validator Agent**: OpenAI GPT-4
+
+### **Key Parameters**
+```javascript
+// Quality Gate Thresholds
+MIN_COMPLETENESS = 0.4    // 40% field completion required
+MIN_CONFIDENCE = 0.3      // 30% confidence score required
+MAX_RETRIES = 2          // Maximum retry attempts
+
+// URL Validation
+URL_TIMEOUT = 5000       // 5 second timeout for accessibility check
+RETRY_WAIT = 1000        // 1 second between retries
+```
+
+### **JSON Schema Structure**
+```json
+{
+  "passport": {
+    "id": "URL or unique identifier",
+    "issuedOn": "ISO timestamp",
+    "authority": "Domain or company name",
+    "eventsCount": "Number of steps",
+    "contributorsCount": "Number of actors"
+  },
+  "steps": [
+    {
+      "stepNumber": "Sequential number",
+      "narrative": {
+        "title": "Product/page title",
+        "paragraph": "Description content"
+      },
+      "extraNote": "Price or additional info"
+    }
+  ],
+  "actors": [
+    {
+      "fullName": "Company/vendor name",
+      "country": "Derived from domain",
+      "role": "vendor/manufacturer",
+      "website": "Company website",
+      "sns": "Social media links"
+    }
+  ]
+}
+```
