@@ -1,351 +1,442 @@
-# 🔄 AI Web Extraction Workflows
+# 📖 Installation Guide
 
-This directory contains n8n workflow definitions for intelligent web data extraction with multi-agent AI validation.
+Complete setup guide for the AI Web Extractor system with multi-agent workflows and MCP server integration.
 
-## 📁 **Directory Structure**
+## 📋 **Prerequisites**
 
-```
-workflows/
-├── README.md                           # This file
-├── Ai_extractor_workflows.json         # Main extraction workflow
-```
+### **System Requirements**
+- **Operating System**: Linux, macOS, or Windows 10+
+- **RAM**: 4GB minimum, 8GB recommended for optimal performance
+- **Storage**: 15GB free space (includes Docker images and data)
+- **Network**: Stable internet connection for API calls and container pulls
 
-## 🎯 **Main Workflow: Ai_extractor_workflows.json**
+### **Required Software**
 
-### **Overview**
-Multi-agent AI pipeline that transforms any webpage URL into structured JSON data with quality validation and intelligent retry logic.
-
-### **Workflow Components**
-
-#### **1. Input & Validation Layer**
-- **When chat message received** - Chat trigger for URL input
-- **Validate URL** - JavaScript code node for URL format validation
-- **If** - Routes valid URLs forward, rejects invalid ones
-- **Check Url accessibility** - HTTP HEAD request to test URL reachability
-- **IF** - Checks HTTP response status (200 = accessible)
-- **Url Error Handler** - Handles inaccessible or invalid URLs
-
-#### **2. AI Agent Pipeline**
-- **Planner Agent** (OpenAI GPT-4 Turbo) - Analyzes webpage with MCP tools
-  - Uses MCP Client to call `analyze_page_structure`
-  - Extracts comprehensive page information
-  - Provides intelligent reasoning about content
-- **Extractor Agent** (OpenAI GPT-4 Turbo) - Transforms analysis into JSON
-  - Maps analysis to structured JSON schema
-  - Uses logical deduction for missing fields
-  - Applies business rules (e.g., .fr domain = France)
-- **Validator Agent** (OpenAI GPT-4) - Quality assessment and scoring
-  - Counts filled vs empty fields dynamically
-  - Calculates confidence and completeness scores
-  - Provides actionable improvement suggestions
-
-#### **3. Processing & Control Layer**
-- **Code** - JSON Parser that cleans AI-generated output
-  - Removes markdown formatting and escape characters
-  - Provides both individual fields and full JSON string
-  - Handles malformed JSON with error recovery
-- **Parser validation code** - Extracts validation metrics
-  - Robust JSON extraction with 3-tier fallback
-  - Returns structured validation data
-- **Gate quality** - Quality-based decision logic
-  - Implements retry mechanism for low-quality extractions
-  - Sets thresholds (40% completeness, 30% confidence)
-  - Maximum 2 retry attempts with enhanced prompts
-
-#### **4. Output Layer**
-- **Parser** - Final JSON cleaner for output data
-- **LayoutData** - Template mapper for UI display format
-
-### **Data Flow**
-```
-URL Input → Validation → Accessibility → Planner → Extractor → Validator → Quality Gate → Final Output
-    ↓           ↓           ↓           ↓          ↓          ↓           ↓
-  Chat UI   Format      HTTP Test   MCP Tools   JSON     Confidence  Template
-           Check                              Structure  Scoring     Mapping
-                                                  ↓
-                                            Retry Logic (max 2 attempts)
-```
-
-### **MCP Integration**
-The workflow connects to your MCP server container:
-- **SSE Endpoint**: `http://mcp-scraper:8000/sse/`
-- **Tools Used**: `analyze_page_structure`
-- **Container Communication**: Via Docker network `ai-extractor-network`
-
-## 🔧 **Import Instructions**
-
-### **Step 1: Import Workflow**
-1. Open n8n interface at `http://localhost:5678`
-2. Login with your credentials
-3. Click **"Import from file"** or use `Ctrl+O`
-4. Select `Ai_extractor_workflows.json`
-5. Click **"Import"**
-
-### **Step 2: Configure Credentials**
-The workflow requires OpenAI API credentials:
-
-**OpenAI Credential Setup:**
-1. Go to **Credentials** → **Add Credential**
-2. Select **"OpenAI"**
-3. Enter your API key
-4. Name it exactly: `OpenAi account` (matches workflow expectation)
-5. Save
-
-### **Step 3: Configure MCP Connection**
-Verify the **MCP Client** node settings:
-```
-SSE Endpoint: http://mcp-scraper:8000/sse/
-Include Tools: ☑️ analyze_page_structure
-```
-
-**Important**: Ensure your MCP server container is running and accessible.
-
-### **Step 4: Test Workflow**
-1. Click **"Execute Workflow"** or use the chat interface
-2. Enter test URL: `https://example.com/product-page`
-3. Monitor execution in real-time
-4. Check output quality and structure
-
-## 📊 **Workflow Performance**
-
-### **Typical Metrics**
-- **Processing Time**: 20-45 seconds per URL
-- **Success Rate**: 85-95% depending on site complexity
-- **Quality Score**: 0.6-0.9 confidence range
-- **Retry Rate**: 15-20% of extractions trigger retry
-
-### **Quality Thr## 🚀 **Usage Examples**
-
-### **Product Page Extraction**
+#### **Docker & Docker Compose**
 ```bash
-# Input URL
-https://shop.example.com/wireless-headphones
+# Install Docker (choose your platform)
+# Linux (Ubuntu/Debian)
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
 
-# Expected Output
-{
-  "passport": {
-    "id": "https://shop.example.com/wireless-headphones",
-    "authority": "shop.example.com",
-    "issuedOn": "2025-01-15T10:30:00Z"
-  },
-  "steps": [{
-    "narrative": {
-      "title": "Premium Wireless Headphones",
-      "paragraph": "High-quality audio with noise cancellation..."
-    },
-    "extraNote": "€299.99"
-  }],
-  "actors": [{
-    "fullName": "AudioTech Solutions",
-    "country": "France",
-    "role": "vendor"
-  }]
-}
+# macOS - Download Docker Desktop from https://docs.docker.com/desktop/mac/
+# Windows - Download Docker Desktop from https://docs.docker.com/desktop/windows/
+
+# Verify installation
+docker --version
+docker-compose --version  # Should be 2.0+
 ```
 
-### **Article Page Extraction**
+#### **Git**
 ```bash
-# Input URL
-https://news.example.com/ai-breakthrough
+# Linux (Ubuntu/Debian)
+sudo apt update && sudo apt install git
 
-# Expected Output
-{
-  "passport": {
-    "id": "https://news.example.com/ai-breakthrough",
-    "authority": "news.example.com"
-  },
-  "steps": [{
-    "narrative": {
-      "title": "AI Breakthrough in Medical Diagnosis",
-      "paragraph": "Researchers have developed a new AI system..."
-    }
-  }],
-  "actors": [{
-    "fullName": "News Example Media",
-    "role": "publisher"
-  }]
-}
+# macOS
+brew install git
+
+# Windows
+# Download from https://git-scm.com/downloads
+
+# Verify installation
+git --version
 ```
 
-## 🔍 **Troubleshooting**
+### **Required API Keys**
 
-### **Common Issues**
+#### **OpenAI API Key** (Required)
+1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Create account or sign in
+3. Click **"Create new secret key"**
+4. Copy and save the key (starts with `sk-`)
+5. **Important**: Ensure sufficient credits for API usage
 
-**MCP Connection Failed:**
+#### **Groq API Key** (Optional)
+1. Visit [Groq Console](https://console.groq.com/keys)
+2. Create account and verify email
+3. Generate new API key
+4. Copy and save the key (starts with `gsk_`)
+
+## 🚀 **Installation Methods**
+
+### **Method 1: Automated Setup (Recommended)**
+
+#### **Step 1: Clone Repository**
 ```bash
-# Check MCP server status
+# Clone the project
+git clone https://github.com/your-username/ai-web-extractor.git
+cd ai-web-extractor
+
+# Verify repository structure
+ls -la
+```
+
+#### **Step 2: Configure Environment**
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit environment file
+nano .env  # or use your preferred editor
+
+# Required settings to configure:
+OPENAI_API_KEY=sk-your-actual-key-here
+N8N_PASSWORD=your-secure-password-here
+```
+
+#### **Step 3: Run Automated Setup**
+```bash
+# Make setup script executable
+chmod +x scripts/setup-containers.sh
+
+# Run automated setup
+./scripts/setup-containers.sh
+
+# The script will:
+# - Create Docker network
+# - Build MCP server image  
+# - Start both containers
+# - Test connectivity
+# - Display access information
+```
+
+#### **Step 4: Verify Installation**
+```bash
+# Check container status
+docker ps
+
+# Expected output should show:
+# - mcp-scraper (port 8000)
+# - n8n_automation (port 5678)
+
+# Test services
+curl http://localhost:8000/health  # MCP server
+curl http://localhost:5678/healthz # n8n
+```
+
+### **Method 2: Manual Setup**
+
+#### **Step 1: Create Docker Network**
+```bash
+# Create shared network for containers
+docker network create ai-extractor-network
+
+# Verify network creation
+docker network ls | grep ai-extractor
+```
+
+#### **Step 2: Build MCP Server**
+```bash
+# Navigate to MCP server directory
+cd mcp-server
+
+# Build Docker image
+docker build -t mcp-scraper .
+
+# Verify image creation
+docker images | grep mcp-scraper
+```
+
+#### **Step 3: Start MCP Server**
+```bash
+# Run MCP server container
+docker run -d \
+  --name mcp-scraper \
+  --network ai-extractor-network \
+  -p 8000:8000 \
+  -e MCP_LOG_LEVEL=info \
+  mcp-scraper
+
+# Check MCP server logs
 docker logs mcp-scraper
+```
 
-# Test connectivity from n8n container
+#### **Step 4: Start n8n Container**
+```bash
+# Run n8n container (replace password)
+docker run -d \
+  --name n8n_automation \
+  --network ai-extractor-network \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  -e N8N_BASIC_AUTH_ACTIVE=true \
+  -e N8N_BASIC_AUTH_USER=admin \
+  -e N8N_BASIC_AUTH_PASSWORD=your-secure-password \
+  n8nio/n8n:latest
+
+# Check n8n logs
+docker logs n8n_automation
+```
+
+#### **Step 5: Test Container Communication**
+```bash
+# Test network connectivity
 docker exec n8n_automation curl http://mcp-scraper:8000/health
+docker exec n8n_automation wget http://mcp-scraper:8000/sse
 
-# Verify endpoint in MCP Client node
-SSE Endpoint: http://mcp-scraper:8000/sse/  # Note the trailing slash
+# Should show successful connection to MCP server
 ```
 
-**OpenAI API Errors:**
+## ⚙️ **Configuration**
+
+### **Access Applications**
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **n8n Interface** | http://localhost:5678 | admin / your-password |
+| **MCP Server Health** | http://localhost:8000/health | No auth required |
+
+### **Import Workflow**
+
+#### **Step 1: Access n8n**
+1. Open browser to `http://localhost:5678`
+2. Login with credentials from your `.env` file
+3. You should see the n8n workflow editor
+
+#### **Step 2: Import Workflow File**
+1. Click **"Import from file"** or press `Ctrl+O`
+2. Navigate to `workflows/Ai_extractor_workflows.json`
+3. Select file and click **"Open"**
+4. Click **"Import"** to add workflow to n8n
+
+#### **Step 3: Configure Credentials**
+
+**OpenAI Credentials:**
+1. Go to **Settings** → **Credentials**
+2. Click **"Add Credential"**
+3. Search for and select **"OpenAI"**
+4. Enter your API key from earlier
+5. Set credential name to: `OpenAi account` (exact match required)
+6. Click **"Save"**
+
+**Verify MCP Connection:**
+1. Open the imported workflow
+2. Find the **"MCP Client"** node
+3. Verify settings:
+   ```
+   SSE Endpoint: http://mcp-scraper:8000/sse/
+   Include Tools: ☑️ analyze_page_structure
+   ```
+
+### **Test Installation**
+
+#### **Basic Functionality Test**
+1. In n8n, open the imported workflow
+2. Click **"Execute Workflow"** button
+3. When prompted, enter a test URL: `https://example.com`
+4. Monitor execution progress in the workflow editor
+5. Check output in the final node for extracted data
+
+#### **Container Health Test**
 ```bash
-# Check credential configuration
-- Credential name must be exactly: "OpenAi account"
-- Verify API key is valid and has sufficient credits
-- Check rate limits if getting 429 errors
+# Check all containers are running
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Test MCP server endpoints
+curl -s http://localhost:8000/health | jq .
+
+# Test n8n health
+curl -s http://localhost:5678/healthz
 ```
 
-**Low Quality Extractions:**
+## 🔧 **Troubleshooting**
+
+### **Container Issues**
+
+**Containers not starting:**
 ```bash
-# Common causes:
-- JavaScript-heavy websites (MCP should handle this)
-- Blocked by CORS or anti-bot measures
-- Content behind authentication
-- Very minimal content on page
+# Check Docker daemon
+sudo systemctl status docker  # Linux
+# or restart Docker Desktop (Windows/Mac)
 
-# Solutions:
-- Let retry logic attempt enhanced extraction
-- Check MCP server logs for specific errors
-- Test with simpler websites first
+# Check available resources
+docker system df
+docker system prune  # Clean up if needed
+
+# Check logs for specific errors
+docker logs mcp-scraper
+docker logs n8n_automation
 ```
 
-**Workflow Execution Timeout:**
+**Port conflicts:**
 ```bash
-# Typical processing times:
-- Simple pages: 15-25 seconds
-- Complex pages: 30-45 seconds
-- With retries: 60-90 seconds
+# Check if ports are already in use
+netstat -tlnp | grep :5678  # n8n port
+netstat -tlnp | grep :8000  # MCP port
 
-# If timing out consistently:
-- Check MCP server performance
-- Verify Docker container resources
-- Monitor OpenAI API response times
+# If ports are occupied, stop conflicting services or use different ports
 ```
 
-### **Performance Optimization**
-
-**For High-Volume Usage:**
-- Use webhooks instead of chat trigger for batch processing
-- Implement caching for frequently accessed URLs
-- Monitor OpenAI API usage and costs
-- Consider using Groq for validation to reduce OpenAI costs
-
-## 📊 **Monitoring & Analytics**
-
-### **Key Metrics to Track**
-- **Success Rate**: % of successful extractions
-- **Quality Score**: Average completeness and confidence
-- **Processing Time**: Average time per extraction
-- **Retry Rate**: % of extractions requiring retries
-- **API Costs**: OpenAI token usage per extraction
-
-### **Quality Indicators**
-- **High Quality (0.8+ completeness)**: Rich structured data
-- **Medium Quality (0.5-0.8)**: Basic information extracted
-- **Low Quality (0.3-0.5)**: Minimal data, may need manual review
-- **Poor Quality (<0.3)**: Failed extraction, manual intervention needed
-
-## 🔄 **Workflow Versions**
-
-### **Current Version: v1.0**
-- Multi-agent pipeline with quality validation
-- Intelligent retry logic with enhanced prompts
-- MCP integration for robust web scraping
-- Dynamic JSON schema mapping
-
-### **Future Enhancements**
-- Batch URL processing capability
-- Custom schema templates for different industries
-- Advanced analytics and reporting
-- Integration with external data sources
-
-## 📝 **Development Notes**
-
-### **Code Nodes**
-- **Validate URL**: Basic regex validation with retry counter
-- **Code**: JSON parser with markdown cleaning and error handling
-- **Parser validation code**: 3-tier extraction with regex fallback
-- **Gate quality**: Decision logic for retry vs accept
-- **Parser**: Final data cleaner
-- **LayoutData**: Template mapping for UI display
-
-### **Webhook Configuration**
+**Network communication issues:**
 ```bash
-# Chat trigger webhook ID
-webhookId: "69b625fe-dd04-4113-bd3a-0b6c7266f670"
+# Recreate network
+docker network rm ai-extractor-network
+docker network create ai-extractor-network
 
-# Access URL
-https://your-n8n-domain.com/webhook/69b625fe-dd04-4113-bd3a-0b6c7266f670
+# Restart containers with network
+docker stop mcp-scraper n8n_automation
+docker rm mcp-scraper n8n_automation
+
+# Recreate containers (use your setup commands)
 ```
 
----
+### **API & Authentication Issues**
 
-## 🤝 **Contributing**
+**OpenAI API errors:**
+```bash
+# Test API key directly
+curl -H "Authorization: Bearer $OPENAI_API_KEY" \
+  https://api.openai.com/v1/models
 
-To modify or enhance the workflow:
+# Common issues:
+# - Invalid API key format
+# - Insufficient credits
+# - Rate limiting (429 errors)
+# - Billing issues
+```
 
-1. **Backup Current Version**: Export existing workflow before changes
-2. **Test Changes**: Use development environment for testing
-3. **Document Updates**: Update this README with any changes
-4. **Version Control**: Increment version number in workflow name
+**n8n authentication problems:**
+```bash
+# Reset n8n password
+docker exec -it n8n_automation n8n user-management:reset --email=admin@example.com
 
-## 📄 **License**
+# Or recreate container with new password
+docker stop n8n_automation
+docker rm n8n_automation
+# Run with new N8N_BASIC_AUTH_PASSWORD
+```
 
-This workflow is part of the AI Web Extractor project and follows the same MIT License.
+### **MCP Server Issues**
+
+**MCP server not responding:**
+```bash
+# Check MCP server logs
+docker logs -f mcp-scraper
+
+# Common issues:
+# - Playwright browser installation failed
+# - Python dependencies missing
+# - Memory/resource constraints
+
+# Rebuild MCP image
+docker build --no-cache -t mcp-scraper mcp-server/
+```
+
+**Playwright browser issues:**
+```bash
+# If browser installation failed, rebuild with verbose output
+docker build --no-cache --progress=plain -t mcp-scraper mcp-server/
+```
+
+## 🔒 **Security Considerations**
+
+### **Production Deployment**
+
+**Environment Security:**
+```bash
+# Use strong passwords
+N8N_PASSWORD=$(openssl rand -base64 32)
+
+# Restrict network access
+# Only expose necessary ports
+# Use firewall rules to limit access
+```
+
+**Container Security:**
+```bash
+# Run with resource limits
+docker run -d \
+  --name mcp-scraper \
+  --memory=2g \
+  --cpus=1.5 \
+  --restart=unless-stopped \
+  mcp-scraper
+```
+
+**API Key Management:**
+- Store API keys in secure environment variables
+- Use Docker secrets for production
+- Rotate API keys regularly
+- Monitor API usage and costs
+
+## 📊 **Performance Optimization**
+
+### **Resource Allocation**
+
+**Docker Resources:**
+```bash
+# Increase Docker memory (Docker Desktop)
+# Recommended: 4GB+ RAM allocation
+
+# Monitor resource usage
+docker stats mcp-scraper n8n_automation
+```
+
+**Container Optimization:**
+```bash
+# Production container limits
+docker run -d \
+  --name mcp-scraper \
+  --memory=2g \
+  --cpus=1.5 \
+  --restart=unless-stopped \
+  mcp-scraper
+```
+
+### **Monitoring Setup**
+
+**Basic Monitoring:**
+```bash
+# Check container health
+docker ps --filter "name=mcp-scraper" --filter "name=n8n_automation"
+
+# Monitor logs
+docker logs -f mcp-scraper &
+docker logs -f n8n_automation &
+```
+
+## 🎯 **Next Steps**
+
+After successful installation:
+
+1. **📚 Read Usage Guide**: Check `workflows/README.md` for detailed workflow usage
+2. **🎮 Run Test Extractions**: Try different types of websites (products, articles, companies)
+3. **⚙️ Customize Configuration**: Adjust quality thresholds and retry logic
+4. **📊 Monitor Performance**: Track success rates and processing times
+5. **🔧 Explore Advanced Features**: Custom schemas, batch processing, integrations
+
+## 🆘 **Getting Help**
+
+**Documentation:**
+- [Workflow Usage Guide](../workflows/README.md)
+- [MCP Server Documentation](../mcp-server/README.md)
+- [Troubleshooting Guide](./troubleshooting.md)
+
+**Support Channels:**
+- **GitHub Issues**: Report bugs and request features
+- **Documentation**: Check all README files for detailed information
+- **Container Logs**: Most issues can be diagnosed from Docker logs
+
+## 📄 **Installation Checklist**
+
+- [ ] Docker and Docker Compose installed
+- [ ] Git installed and repository cloned
+- [ ] OpenAI API key obtained and configured
+- [ ] Environment variables set in `.env` file
+- [ ] Docker containers built and running
+- [ ] Network connectivity tested between containers
+- [ ] n8n accessible at http://localhost:5678
+- [ ] MCP server responding at http://localhost:8000
+- [ ] Workflow imported into n8n
+- [ ] OpenAI credentials configured in n8n
+- [ ] Test extraction completed successfully
 
 ---
 
 <div align="center">
 
-**🚀 Ready to extract intelligence from any webpage!**
+**✅ Installation Complete! Ready to extract intelligence from the web.**
 
-[⬆️ Back to Main Project](../README.md) • [📖 Full Documentation](../docs/) • [🔧 MCP Server](../mcp-server/)
+[🚀 Start Extracting](../workflows/README.md) • [🔧 Configure MCP](../mcp-server/README.md) • [⬆️ Back to Main](../README.md)
 
 </div>
-
-## 🔧 **Workflow Configuration**
-
-### **AI Models Used**
-- **Planner Agent**: OpenAI GPT-4 Turbo Preview
-- **Extractor Agent**: OpenAI GPT-4 Turbo Preview  
-- **Validator Agent**: OpenAI GPT-4
-
-### **Key Parameters**
-```javascript
-// Quality Gate Thresholds
-MIN_COMPLETENESS = 0.4    // 40% field completion required
-MIN_CONFIDENCE = 0.3      // 30% confidence score required
-MAX_RETRIES = 2          // Maximum retry attempts
-
-// URL Validation
-URL_TIMEOUT = 5000       // 5 second timeout for accessibility check
-RETRY_WAIT = 1000        // 1 second between retries
-```
-
-### **JSON Schema Structure**
-```json
-{
-  "passport": {
-    "id": "URL or unique identifier",
-    "issuedOn": "ISO timestamp",
-    "authority": "Domain or company name",
-    "eventsCount": "Number of steps",
-    "contributorsCount": "Number of actors"
-  },
-  "steps": [
-    {
-      "stepNumber": "Sequential number",
-      "narrative": {
-        "title": "Product/page title",
-        "paragraph": "Description content"
-      },
-      "extraNote": "Price or additional info"
-    }
-  ],
-  "actors": [
-    {
-      "fullName": "Company/vendor name",
-      "country": "Derived from domain",
-      "role": "vendor/manufacturer",
-      "website": "Company website",
-      "sns": "Social media links"
-    }
-  ]
-}
-```
