@@ -252,17 +252,6 @@ Tools: analyze_page_structure, extract_content_with_plan
 
 **Important**: Use the trailing slash `/sse/` for proper MCP protocol communication.
 
-### **Playwright Configuration**
-```python
-# Browser settings (in code)
-browser_config = {
-    'headless': True,
-    'viewport': {'width': 1920, 'height': 1080},
-    'user_agent': 'Mozilla/5.0...',
-    'timeout': 45000
-}
-```
-
 ## 📊 **Page Type Detection**
 
 The server automatically detects page types with confidence scoring:
@@ -461,8 +450,6 @@ docker run -d \
   -e N8N_BASIC_AUTH_PASSWORD=your-secure-password \
   n8nio/n8n:latest
 ```
-
-### **Performance Optimization**
 
 **For high-volume usage:**
 ```env
