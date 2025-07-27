@@ -146,7 +146,6 @@ docker run -d \
   --name mcp-scraper \
   --network ai-extractor-network \
   -p 8000:8000 \
-  -e MCP_LOG_LEVEL=info \
   mcp-scraper
 
 # Run n8n container (separate)
@@ -155,18 +154,14 @@ docker run -d \
   --network ai-extractor-network \
   -p 5678:5678 \
   -v n8n_data:/home/node/.n8n \
-  -e N8N_BASIC_AUTH_ACTIVE=true \
-  -e N8N_BASIC_AUTH_USER=admin \
-  -e N8N_BASIC_AUTH_PASSWORD=your-password \
   n8nio/n8n:latest
 ```
 
 ### **Container Communication**
 In this setup:
-- **MCP Server**: Available at `http://mcp-scraper:8000` (internal) and `http://localhost:8000` (external)
+- **MCP Server**: Available at `http://mcp-scraper:8000/sse` (internal) and `http://localhost:8000` (external)
 - **n8n Interface**: Available at `http://localhost:5678`
 - **Network**: Both containers communicate via `ai-extractor-network`
-- **Container IPs**: Automatically assigned (e.g., `172.19.0.3` for MCP server)
 
 ### **Local Development**
 ```bash
@@ -182,14 +177,8 @@ python mcp_server.py
 
 ### **Test the Setup**
 ```bash
-# Health check MCP server (external)
-curl http://localhost:8000/health
-
-# Check n8n connectivity (external)
-curl http://localhost:5678/healthz
 
 # Test container network communication (internal)
-docker exec n8n_automation curl http://mcp-scraper:8000/health
 docker exec n8n_automation wget http://mcp-scraper:8000/sse
 
 # Verify container network details
@@ -210,21 +199,6 @@ docker network ls
 docker network inspect ai-extractor-network
 ```
 
-### **Environment Variables**
-```env
-# Server configuration
-MCP_LOG_LEVEL=info          # Logging level (debug, info, warning, error)
-MCP_MAX_RETRIES=3           # Maximum retry attempts
-MCP_TIMEOUT=45              # Request timeout in seconds
-MCP_USER_AGENT=Mozilla/5.0... # Browser user agent
-HOST=0.0.0.0               # Bind to all interfaces for container access
-PORT=8000                  # Internal container port
-
-# Performance tuning
-MCP_CONCURRENT_LIMIT=5      # Max concurrent extractions
-MCP_RATE_LIMIT=100          # Requests per minute
-MCP_CACHE_TTL=3600          # Cache duration in seconds
-```
 
 ### **Container Configuration**
 ```bash
@@ -233,10 +207,6 @@ docker run -d \
   --name mcp-scraper \
   --network ai-extractor-network \
   -p 8000:8000 \
-  -e MCP_LOG_LEVEL=info \
-  -e MCP_TIMEOUT=45 \
-  -e HOST=0.0.0.0 \
-  -e PORT=8000 \
   mcp-scraper
 
 # n8n container connection to MCP
@@ -272,21 +242,15 @@ The server automatically detects page types with confidence scoring:
 3. **Pattern Recognition** - Text pattern matching for contacts, dates
 4. **Fallback Extraction** - Generic content area identification
 
-### **Quality Indicators**
-- **High Confidence (0.8+)**: Rich metadata, structured data, clear content areas
-- **Medium Confidence (0.5-0.8)**: Some structured data, identifiable content
-- **Low Confidence (0.3-0.5)**: Basic content only, minimal structure
-- **Poor Quality (<0.3)**: Minimal extractable content
 
 ## 🐛 **Debugging & Monitoring**
 
 ### **Container Health Checks**
 ```bash
 # Check MCP server health (external access)
-curl http://localhost:8000/health
+curl http://localhost:8000/sse
 
 # Check from n8n container (internal network)
-docker exec n8n_automation curl http://mcp-scraper:8000/health
 docker exec n8n_automation wget http://mcp-scraper:8000/sse
 
 # View container logs
@@ -333,22 +297,6 @@ docker rm mcp-scraper
 docker run -d --name mcp-scraper --network ai-extractor-network -p 8000:8000 mcp-scraper
 ```
 
-### **Screenshot Debugging**
-Use the `get_page_screenshot` tool to visually debug extraction issues:
-```python
-# In n8n workflow or direct API call
-screenshot_result = await mcp.get_page_screenshot("https://problematic-site.com")
-# Save screenshot_result.screenshot_base64 to debug visually
-```
-
-### **Logging Levels**
-```python
-# Set log level via environment
-export MCP_LOG_LEVEL=debug
-
-# Available levels: debug, info, warning, error
-```
-
 ## 🔧 **Troubleshooting**
 
 ### **Common Container Issues**
@@ -360,11 +308,8 @@ docker inspect mcp-scraper | grep NetworkMode
 docker inspect n8n_automation | grep NetworkMode
 
 # Test connectivity (your actual container names)
-docker exec n8n_automation curl http://mcp-scraper:8000/health
 docker exec n8n_automation wget http://mcp-scraper:8000/sse
 
-# Verify network communication with IP
-docker exec n8n_automation curl http://172.19.0.3:8000/health  # Use actual IP
 ```
 
 **Container startup failures:**
@@ -434,8 +379,6 @@ docker run -d \
   --memory=2g \
   --cpus=1.5 \
   -p 8000:8000 \
-  -e MCP_LOG_LEVEL=warning \
-  -e MCP_CONCURRENT_LIMIT=10 \
   mcp-scraper
 
 docker run -d \
@@ -445,110 +388,8 @@ docker run -d \
   --cpus=1.0 \
   -p 5678:5678 \
   -v n8n_data:/home/node/.n8n \
-  -e N8N_BASIC_AUTH_ACTIVE=true \
-  -e N8N_BASIC_AUTH_USER=admin \
-  -e N8N_BASIC_AUTH_PASSWORD=your-secure-password \
   n8nio/n8n:latest
 ```
-
-**For high-volume usage:**
-```env
-# Increase concurrent limits
-MCP_CONCURRENT_LIMIT=10
-MCP_RATE_LIMIT=200
-
-# Enable caching
-MCP_CACHE_ENABLED=true
-MCP_CACHE_TTL=3600
-```
-
-**Memory optimization:**
-```python
-# Browser resource limits (in code)
-browser_args = [
-    '--max_old_space_size=1024',
-    '--no-sandbox',
-    '--disable-dev-shm-usage'
-]
-```
-
-## 📈 **Performance Metrics**
-
-### **Typical Performance**
-- **Average extraction time**: 2-5 seconds
-- **Success rate**: 95%+ on standard websites
-- **Memory usage**: ~200MB per concurrent extraction
-- **CPU usage**: ~30% during active scraping
-
-### **Optimization Tips**
-- Use headless mode for production
-- Implement request caching for repeated URLs
-- Monitor memory usage with concurrent extractions
-- Set appropriate timeouts for different site types
-
-## 🏗️ **Architecture**
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  n8n_automation │────│   mcp-scraper    │────│ Target Website │
-│   (port 5678)   │    │   (port 8000)    │    │                 │
-│                 │    │ IP: 172.19.0.3   │    │ - Any webpage   │
-│ - AI Agents     │    │                  │    │ - JavaScript    │
-│ - Validation    │    │ - Playwright     │    │ - Dynamic       │
-│ - Retry Logic   │    │ - Content        │    │   Content       │
-│                 │    │   Analysis       │    └─────────────────┘
-└─────────────────┘    │ - Quality        │    
-        │              │   Scoring        │    
-        └─────────────────────┬─────────────────────┘
-                ai-extractor-network
-            (Container communication via hostnames)
-```
-
-### **Container Communication Flow**
-1. **n8n Workflow** triggers MCP Client node
-2. **MCP Client** sends request to `http://mcp-scraper:8000/sse/`
-3. **Docker Network** resolves `mcp-scraper` to IP `172.19.0.3`
-4. **MCP Server** receives request and processes with Playwright
-5. **Playwright** loads target webpage with full browser
-6. **Content Analysis** extracts structured data with confidence scoring
-7. **Response** returns to n8n via container network
-8. **n8n Agents** process the extracted data for validation
-
-### **Network Configuration**
-- **Network Name**: `ai-extractor-network` (default bridge)
-- **Container Names**: `mcp-scraper`, `n8n_automation`
-- **Internal Communication**: Container-to-container via hostnames
-- **External Access**: Host ports (5678 for n8n, 8000 for MCP)
-- **IP Range**: `172.19.0.x` subnet (Docker default)
-- **Security**: Isolated network, containers only accessible to each other
-
-## 🤝 **Contributing**
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-### **Development Setup**
-```bash
-# Install development dependencies
-pip install -r requirements.txt
-pip install pytest pytest-asyncio black flake8
-
-# Run tests
-pytest
-
-# Format code
-black mcp_server.py
-
-# Lint code
-flake8 mcp_server.py
-```
-
-## 📄 **License**
-
-This project is part of the AI Web Extractor system and follows the same MIT License.
 
 ## 🙏 **Acknowledgments**
 
@@ -557,11 +398,3 @@ This project is part of the AI Web Extractor system and follows the same MIT Lic
 - **[n8n](https://n8n.io)** - Workflow automation platform integration
 
 ---
-
-<div align="center">
-
-**🚀 Ready to extract intelligence from any webpage!**
-
-[⬆️ Back to Main Project](../README.md) • [📖 Documentation](../docs/) • [🐛 Issues](../../issues)
-
-</div>
